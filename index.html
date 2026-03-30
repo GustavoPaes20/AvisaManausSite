@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>WebAdm</title>
+    <link rel="stylesheet" href="styles.css">
+    <script>
+        async function handleLogin(event) {
+            event.preventDefault();
+
+            const email = document.getElementById('email').value;
+            const senha = document.getElementById('senha').value;
+
+            try {
+                const apiBaseUrl = window.location.origin;
+                const response = await fetch(`${apiBaseUrl}/api/login`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ email, senha }),
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    alert("Login realizado com sucesso!");
+                    localStorage.setItem("Adm", JSON.stringify(data.Adm)); 
+                    window.location.href = "menu.html";
+                } else {
+                    const errorData = await response.json();
+                    alert(errorData.message || "Erro ao realizar login!");
+                }
+            } catch (err) {
+                console.error("Erro no login:", err);
+                alert("Não foi possível conectar ao servidor. Tente novamente mais tarde.");
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="background">
+        <img class="img" src="assets/Vector 2.png" alt="Imagem de fundo">
+
+        <div class="title-container">
+            <img src="assets/LOGO.png" alt="Logo Avisa Manaus" class="logo">
+            <h2 class="title">AVISA MANAUS</h2>
+        </div>
+
+        <div class="login">
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="input-data">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" name="email" placeholder="Digite seu email" required>
+                </div>
+                <div class="input-data">
+                    <label for="senha">Senha:</label>
+                    <input type="password" id="senha" name="senha" placeholder="Digite sua senha" required>
+                </div>
+                <button class="entrar" type="submit">Entrar</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

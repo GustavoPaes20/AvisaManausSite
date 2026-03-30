@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Página de Menu Inicial</title>
+    <link rel="stylesheet" href="stylesMenu.css">
+
+    <script type="text/javascript">
+        function abrir(id) {
+            document.getElementById(id).style.display = "block";
+        }
+
+        function fechar(id) {
+            document.getElementById(id).style.display = "none";
+        }
+
+        function fecharTodosPopups() {
+            const popups = document.querySelectorAll('.popupChat, .popupDenuncias, .popupADM');
+            popups.forEach(popup => {
+                popup.style.display = "none";
+            });
+        }
+
+        async function initMap() {
+            const defaultLocation = { lat: -3.119, lng: -60.0218 };
+            const map = new google.maps.Map(document.getElementById("map"), {
+                zoom: 15, // Nível de zoom
+                center: { lat: -3.0998404861450624, lng: -60.026411555074986 },
+                styles: [
+                    {
+                        "elementType": "geometry",
+                        "stylers": [{ "color": "#192d4a" }]
+                    },
+                    {
+                        "elementType": "labels.icon",
+                        "stylers": [{ "visibility": "off" }]
+                    },
+                    {
+                        "elementType": "labels.text.fill",
+                        "stylers": [{ "color": "#989e9a" }]
+                    },
+                    {
+                        "elementType": "labels.text.stroke",
+                        "stylers": [{ "color": "#065c27" }]
+                    },
+                    {
+                        "featureType": "administrative",
+                        "elementType": "geometry",
+                        "stylers": [{ "color": "" }]
+                    },
+                    {
+                        "featureType": "poi",
+                        "elementType": "geometry",
+                        "stylers": [{ "color": "#628ECB" }]
+                    },
+                    {
+                        "featureType": "road",
+                        "elementType": "geometry",
+                        "stylers": [{ "color": "#395886" }]
+                    },
+                    {
+                        "featureType": "water",
+                        "elementType": "geometry",
+                        "stylers": [{ "color": "#060E19" }]
+                    }
+                ]
+            });
+
+            const markers = await fetchDenuncias();
+
+            markers.forEach(markerData => {
+                const marker = new google.maps.Marker({
+                    position: { lat: markerData.latitude, lng: markerData.longitude },
+                    map: map,
+                    title: markerData.tipo,
+                    icon: {
+                        url: "assets/marcador.png",
+                        scaledSize: new google.maps.Size(60, 60)
+                    }
+                });
+
+                const infoWindowContent = `
+                        <h3>${markerData.tipo}</h3>
+                        <p>${markerData.descricao}</p>
+                        <button class="ver-fotos" data-id="${markerData.id}">Ver Fotos</button>
+                    `;
+
+                const infoWindow = new google.maps.InfoWindow({
+                    content: infoWindowContent
+                });
+
+                marker.addListener("click", () => {
+                    infoWindow.open(map, marker);
+                });
+
+                google.maps.event.addListener(infoWindow, 'domready', function () {
+                    const verFotosButton = document.querySelector(`button[data-id="${markerData.id}"]`);
+                    if (verFotosButton) {
+                        verFotosButton.addEventListener('click', function () {
+                            abrirFotos(markerData.anexo);
+                        });
+                    }
+                });
+
+                addToDenunciaList(markerData, marker, map);
+            });
+        }
+
+        async function fetchDenuncias() {
+            try {
+                const apiBaseUrl = window.location.origin;
+                const response = await fetch(`${apiBaseUrl}/api/DenunciaUsuario`);
+                const markers = await response.json();
+                return markers;
+            } catch (error) {
+                console.error("Erro ao carregar denúncias:", error);
+                return [];
+            }
+        }
+
+        function addToDenunciaList(markerData, marker, map) {
+            const listElement = document.querySelector('.info-box .denuncia-items');
+
+            // Cria um item da lista
+            const listItem = document.createElement('li');
+            listItem.className = 'denuncia-item';
+
+            listItem.innerHTML = `
+                    <h4>${markerData.tipo}</h4>
+                    <p>${markerData.descricao}</p>
+                    <p><strong>Data:</strong> ${formatDate(markerData.data)}</p>
+                    <button>Ver no Mapa</button>
+                    <div class="status-options">
+                        <select class="status-select" data-id="${markerData.id}">
+                            <option value="em-analise" ${markerData.status === 'em-analise' ? 'selected' : ''}>Em Análise</option>
+                            <option value="solucionado" ${markerData.status === 'solucionado' ? 'selected' : ''}>Solucionado</option>
+                        </select>
+                    </div>
+                `;
+
+            function formatDate(dateString) {
+                const options = {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: true
+                };
+
+                const date = new Date(dateString);
+                return date.toLocaleString('pt-BR', options);
+            }
+
+            const select = listItem.querySelector('.status-select');
+            select.addEventListener('change', function () {
+                const status = this.value;
+                sendStatusUpdate(markerData._id, status);
+            });
+
+            listElement.appendChild(listItem);
+
+            const button = listItem.querySelector('button');
+            button.addEventListener('click', function () {
+                centerMapOnMarker(markerData.latitude, markerData.longitude, map);
+            });
+        }
+
+        function centerMapOnMarker(lat, lng, map) {
+            const position = { lat: parseFloat(lat), lng: parseFloat(lng) };
+            map.panTo(position);
+            map.setZoom(15);
+            const infoWindow = new google.maps.InfoWindow({
+                content: `<h3>${tipo}</h3><p>${descricao}</p>`
+            });
+            infoWindow.setPosition(position);
+            infoWindow.open(map);
+        }
+
+        function sendStatusUpdate(id, status) {
+            fetch('http://localhost:3000/api/DenunciaUsuario/update', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    id: id,
+                    status: status
+                }),
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log(`Status da denúncia ${id} atualizado para ${status}`);
+                    } else {
+                        console.error('Erro ao atualizar status:', data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro de rede:', error);
+                });
+        }
+
+        function logout() {
+            localStorage.removeItem("Adm");
+            window.location.href = "index.html";
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            const user = localStorage.getItem("Adm");
+
+            if (!user) {
+                window.location.href = "index.html";
+            } else {
+                const userData = JSON.parse(user);
+                document.querySelector(".empresa-nome").textContent = userData.empresa;
+            }
+        });
+
+        function abrirFotos(fotos) {
+            const modal = document.createElement('div');
+            modal.classList.add('modal');
+
+            const closeButton = document.createElement('button');
+            closeButton.textContent = 'Fechar';
+            closeButton.classList.add('fechar-modal');
+            closeButton.addEventListener('click', () => modal.remove());
+
+            const fotosContainer = document.createElement('div');
+            fotosContainer.classList.add('modal-fotos');
+            fotos.forEach(fotoUrl => {
+                const img = document.createElement('img');
+                img.src = fotoUrl;
+                img.alt = 'Foto da Denúncia';
+                fotosContainer.appendChild(img);
+            });
+
+            modal.appendChild(closeButton);
+            modal.appendChild(fotosContainer);
+            document.body.appendChild(modal);
+        }
+
+    </script>
+</head>
+
+<body>
+
+    <div class="div-top">
+        <div class="profile">
+            <img class="profile-icon" src="assets/USER.png" alt="Ícone do Perfil" href="javascript:void(0)"
+                onclick="abrir('popupADM')">
+            <div>
+                <p class="empresa-nome">Empresa X</p>
+                <p class="adm">ADMINISTRADOR</p>
+            </div>
+        </div>
+        AVISA MANAUS
+    </div>
+
+    <div class="container">
+        <div class="menu">
+            <div class="menu-item">
+                <a href="javascript:void(0)" onclick="window.location.href='menu.html'">
+                    <img src="assets/mdi_home.png" alt="Início">
+                    Início
+                </a>
+            </div>
+            <div class="menu-item">
+                <a href="javascript:void(0)" onclick="abrir('popupChat')">
+                    <img src="assets/material-symbols_chat.png" alt="Chat">
+                    Chat
+                </a>
+            </div>
+            <div class="menu-item">
+                <a href="javascript:void(0)" onclick="abrir('popupDenuncias')">
+                    <img src="assets/solar_book-bold.png" alt="Registros">
+                    Registros
+                </a>
+            </div>
+            <div class="menu-item exit">
+                <a href="javascript:void(0)" onclick="logout()">
+                    <img src="assets/Vector.png" alt="Sair">
+                    Sair
+                </a>
+            </div>
+        </div>
+
+        <div id="popupChat" class="popupChat">
+            <img src="assets/Vector.png" onclick="fechar('popupChat')"
+                style="cursor:pointer; position: absolute; top: 10px; right: 10px;">
+            <div class="notification-title">
+                Enviar Notificação
+            </div>
+
+            <form id="notificationForm">
+                <label for="email" style="display: block; margin-bottom: 10px; color: #ffffff;">E-mail do
+                    destinatário:</label>
+                <input type="email" id="email" name="email" placeholder="Digite o e-mail" required
+                    style="width: 100%; padding: 10px; margin-bottom: 20px; border: 1px solid #ccc; border-radius: 5px; font-size: 16px;">
+
+                <label for="message" style="display: block; margin-bottom: 10px; color: #ffffff;">Texto da
+                    notificação:</label>
+                <textarea id="message" name="message" placeholder="Digite a mensagem" required
+                    style="width: 100%; height: 150px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 16px;"></textarea>
+
+                <button type="submit"
+                    style="margin-top: 20px; padding: 10px 20px; background-color: #395886; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer;">
+                    Enviar Notificação
+                </button>
+            </form>
+
+            <p id="statusMessage" style="text-align: center; color: green; display: none; margin-top: 10px;">Notificação
+                enviada!</p>
+        </div>
+
+        <div id="popupDenuncias" class="popupDenuncias">
+            <img src="assets/Vector.png" onclick="fechar('popupDenuncias')"
+                style="cursor:pointer; position: absolute; top: 10px; right: 10px;">
+            <div class="notification-title">
+                Lista de Registro
+            </div>
+            <div class="search-container">
+                <input type="text" placeholder="Pesquisar..." class="search-input" oninput="filtrarDenuncias()">
+                <button class="search-button">Pesquisar</button>
+            </div>
+
+            <div class="item-list" id="item-list">
+
+            </div>
+        </div>
+
+
+        <div id="popupADM" class="popupADM">
+            <img src="assets/Vector.png" onclick="fechar('popupADM')"
+                style="cursor:pointer; position: absolute; top: 10px; right: 10px;">
+            <div class="notification-title-ADM">
+                PERFIL
+            </div>
+        </div>
+
+        <div class="map" id="map"></div>
+    </div>
+
+
+    <div class="info-box">
+        <h2>DENÚNCIAS</h2>
+        <div class="denuncia-list">
+            <ul class="denuncia-items">
+            </ul>
+        </div>
+
+        <div class="info-box-search">
+            <input type="text" placeholder="Pesquisar por nome..." class="info-box-search-input">
+            <button class="info-box-search-button">
+                <img src="assets/pesquisa-de-lupa.png" alt="Ícone de Pesquisa" class="search-icon">
+            </button>
+        </div>
+    </div>
+
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDv7YRz1WWPhkr6aim8wEm4WDPBdk81z54&callback=initMap"
+        async defer></script>
+
+</body>
+
+</html>
